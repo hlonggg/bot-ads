@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// USER
+// ---------------------------------------------------------------------------
+model User {
+  id            String   @id @default(cuid())
+  telegramId    String   @unique              // Telegram user id (string to avoid BigInt issues)
+  username      String?
+  firstName     String?
+  lastName      String?
+
+  balance       Int      @default(0)          // available balance, in smallest currency unit (e.g. VND, no decimals)
+  pendingBalance Int     @default(0)          // held while a withdrawal request is being reviewed
+
+  bankAccountName String?                     // last used, prefilled on next withdraw form
+  bankName        String?
+
+  createdAt     DateTime @default(now())
+  lastSeenAt    DateTime @default(now())
+
+  completions   TaskCompletion[]
+  withdrawals   Withdrawal[]
+
+  @@index([telegramId])
+}
+
+// ---------------------------------------------------------------------------
+// TASK  (created only from admin panel, never seeded)
+// ---------------------------------------------------------------------------
+model Task {
+  id           String   @id @default(cuid())
+  name         String
+  reward       Int                              // amount credited on successful completion
+  adScript     String   @db.Text                // raw 3rd-party script/snippet (Monetag, Adsterra, ...)
+  adNetwork    String   @default("custom")       // "monetag" | "adsterra" | "custom" — used to pick verification strategy
+  adFormat     String   @default("interstitial")  // "interstitial" | "popup" — Monetag ad format for this task; ignored for non-monetag networks
+  zoneId       String?                           // network zone/placement id, needed for postback matching
+  isActive     Boolean  @default(true)
+  cooldownSec  Int      @default(0)              // per-user cooldown between repeat completions of this task (0 = one-time)
+  dailyLimit   Int?                              // optional cap on completions/day per user, null = unlimited
+
+  // --- per-event pricing (Monetag only) ---
+  // For adNetwork = "monetag", the actual reward is computed at postback time from
+  // that event's real `estimated_price` (see /api/postback/monetag), not from `reward`
+  // above — `reward` is just an estimated amount shown to the user in the task list.
+  // marginPercent = % of estimated_price paid to the user. Falls back to
+  // Setting("defaultMarginPercent") if null.
+  marginPercent  Int?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  completions  TaskCompletion[]
+
+  @@index([adNetwork])
+}
+
+// ---------------------------------------------------------------------------
+// TASK COMPLETION  (ground truth for anti-fraud + payout ledger)
+// ---------------------------------------------------------------------------
+enum CompletionStatus {
+  PENDING     // ad view claimed client-side, awaiting network postback confirmation
+  CONFIRMED   // postback verified, reward credited
+  REJECTED    // fraud check failed / no postback within window
+}
+
+model TaskCompletion {
+  id           String            @id @default(cuid())
+  taskId       String
+  task         Task              @relation(fields: [taskId], references: [id])
+  userId       String
+  user         User              @relation(fields: [userId], references: [id])
+
+  status       CompletionStatus  @default(PENDING)
+  reward       Int                                  // snapshot of task.reward at completion time
+  ip           String?
+  userAgent    String?
+  requestId    String?           @unique            // correlates client click -> network postback
+  createdAt    DateTime          @default(now())
+  confirmedAt  DateTime?
+
+  @@index([userId, taskId])
+  @@index([requestId])
+}
+
+// ---------------------------------------------------------------------------
+// WITHDRAWAL
+// ---------------------------------------------------------------------------
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Withdrawal {
+  id              String            @id @default(cuid())
+  userId          String
+  user            User              @relation(fields: [userId], references: [id])
+  amount          Int
+  bankAccountName String
+  bankName        String
+  status          WithdrawalStatus  @default(PENDING)
+  adminNote       String?
+  createdAt       DateTime          @default(now())
+  resolvedAt      DateTime?
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// SETTINGS  (single-row key/value config editable from panel: guide text, min withdraw, group link)
+// ---------------------------------------------------------------------------
+model Setting {
+  key   String @id
+  value String @db.Text
+}

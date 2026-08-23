@@ -16,19 +16,33 @@ import { prisma } from "../lib/prisma";
 import { generateReferralCode } from "../lib/referral";
 
 async function backfillReferralCodesIfNeeded() {
-  // 1) Cột "referralCode" đã tồn tại trong DB thật (từ lần push trước) chưa?
-  //    Nếu CHƯA tồn tại -> đây là lần đầu tiên field này được thêm vào và
-  //    bảng User đang trống (dự án mới) hoặc cột sẽ được tạo lần đầu bởi
-  //    chính `prisma db push` chạy ngay sau script này -> không cần backfill.
-  const columnExists: { column_name: string }[] = await prisma.$queryRawUnsafe(
-    `SELECT column_name FROM information_schema.columns WHERE table_name = 'User' AND column_name = 'referralCode'`
+  // 1) Bảng "User" đã tồn tại chưa (deploy lần đầu tuyệt đối, DB trống hoàn
+  //    toàn thì bảng cũng chưa có -> không cần làm gì, để prisma db push tạo
+  //    toàn bộ từ đầu, lúc đó không có row nào nên field bắt buộc không sao).
+  const tableExists: { to_regclass: string | null }[] = await prisma.$queryRawUnsafe(
+    `SELECT to_regclass('public."User"')::text AS to_regclass`
   );
-  if (columnExists.length === 0) {
-    console.log("[migrate] Cột referralCode chưa tồn tại — bỏ qua backfill, để prisma db push tạo mới.");
+  if (!tableExists[0]?.to_regclass) {
+    console.log("[migrate] Bảng User chưa tồn tại (DB trống) — để prisma db push tạo mới từ đầu.");
     return;
   }
 
-  // 2) Cột đã tồn tại -> tìm các user cũ đang có referralCode NULL
+  // 2) Cột "referralCode" đã tồn tại trong bảng chưa?
+  const columnExists: { column_name: string }[] = await prisma.$queryRawUnsafe(
+    `SELECT column_name FROM information_schema.columns WHERE table_name = 'User' AND column_name = 'referralCode'`
+  );
+
+  if (columnExists.length === 0) {
+    // Cột CHƯA từng tồn tại. Nếu bảng đang có sẵn user cũ, `prisma db push`
+    // sẽ từ chối thêm cột bắt buộc này thẳng luôn (đúng lỗi bạn đang gặp).
+    // -> Tự thêm cột này dạng CHO PHÉP NULL bằng SQL thô trước, để có chỗ
+    //    ghi mã referral cho từng user cũ, RỒI mới để prisma db push chuyển
+    //    nó thành bắt buộc (lúc đó mọi row đã có giá trị nên sẽ thành công).
+    console.log("[migrate] Cột referralCode chưa tồn tại — tự thêm dạng optional để chuẩn bị backfill...");
+    await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN "referralCode" TEXT`);
+  }
+
+  // 3) Tìm các user (cũ hoặc vừa thêm cột) đang có referralCode NULL
   const usersWithoutCode: { id: string }[] = await prisma.$queryRawUnsafe(
     `SELECT id FROM "User" WHERE "referralCode" IS NULL`
   );

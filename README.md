@@ -88,6 +88,24 @@ phía Monetag không gửi request), đã thêm route dự phòng `POST /api/tas
   `app/task/page.tsx` (giữ nguyên route để dự phòng, chỉ ngừng gọi từ client) và quay lại hoàn
   toàn dựa vào postback — an toàn hơn nhiều vì có xác nhận từ bên thứ 3 + `estimated_price` thật.
 
+## Referral (mời bạn bè) — cơ chế 2 tầng: mốc thưởng 1 lần + hoa hồng thụ động
+
+Chi tiết đầy đủ + lý do thiết kế nằm trong comment đầu file `lib/referral.ts` — tóm tắt nhanh:
+
+- Link mời: `https://t.me/<botUsername>?start=ref_<referralCode>` — `botUsername` cấu hình ở
+  panel **Cài đặt & Hướng dẫn**, `referralCode` tự sinh khi user `/start` bot lần đầu
+  (`lib/bot.ts`). "Mời thành công" = referee **hoàn thành ít nhất 1 nhiệm vụ Monetag thật**
+  (không tính chỉ bấm vào link), để chặn tạo tài khoản ảo ăn gian mốc thưởng.
+- Mốc 1 lần: người thứ 3/6/15 mời được → cộng thẳng 1.000đ/2.000đ/5.000đ cho referrer.
+- Hoa hồng thụ động: CHỈ 5 người kế tiếp ngay sau mốc 15 (#16–#20) tạo hoa hồng — mỗi người
+  2%/lượt xem họ hoàn thành, tối đa 5×2% = 10%. Khoản này **trích từ margin của admin**, không
+  trừ vào phần referee nhận. Có trần an toàn 70% tổng payout/lượt xem để admin luôn còn lời.
+- Referrer bị tạm khoá hoa hồng (không xoá gì) nếu chính họ không tự làm nhiệm vụ nào trong 7
+  ngày — tự mở khoá ngay khi họ hoạt động lại. Việc kiểm tra khoá làm kiểu "lười" (lazy, ngay
+  lúc có downline kiếm tiền), không cần cron chạy nền riêng.
+- UI: `app/profile/referral` (user) và `app/panel/referrals` (admin, xem tổng chi phí + bảng
+  xếp hạng referrer).
+
 ## Việc cần làm tiếp (chưa xong 100%, cần bạn hoàn thiện theo network thật)
 
 1. **Adsterra không có postback chuẩn như Monetag** — Adsterra chủ yếu là revenue theo

@@ -27,10 +27,25 @@ model User {
   createdAt     DateTime @default(now())
   lastSeenAt    DateTime @default(now())
 
+  // --- Referral (mời bạn bè) ---
+  referralCode     String    @unique              // mã riêng, dùng trong link mời https://t.me/<bot>?start=ref_<code>
+  referredById     String?                        // ai đã mời user này (null nếu vào thẳng, không qua ref)
+  referredBy       User?     @relation("Referrals", fields: [referredById], references: [id])
+  referrals        User[]    @relation("Referrals") // những user mà CHÍNH user này đã mời
+
+  referralRank      Int?                          // vị trí của USER NÀY trong danh sách referrer mời thành công (1-based), set 1 lần duy nhất
+  referralCountedAt DateTime?                     // thời điểm được tính "mời thành công" (hoàn thành nhiệm vụ Monetag đầu tiên)
+
+  referralLocked      Boolean   @default(false)   // true = đang bị tạm khoá nhận hoa hồng do 1 tuần không tự làm nhiệm vụ nào
+  lastTaskCompletedAt DateTime?                    // lần gần nhất CHÍNH user này tự hoàn thành 1 nhiệm vụ bất kỳ (dùng để tính khoá/mở khoá referral)
+
+  referralEarnings ReferralEarning[] @relation("ReferrerEarnings")
+
   completions   TaskCompletion[]
   withdrawals   Withdrawal[]
 
   @@index([telegramId])
+  @@unique([referredById, referralRank]) // NULL không xung đột (Postgres) — chỉ chặn trùng rank thật khi cả 2 đều có giá trị
 }
 
 // ---------------------------------------------------------------------------
@@ -89,6 +104,7 @@ model TaskCompletion {
   //                phòng trong lúc chờ Monetag, admin nên theo dõi log này để phát hiện
   //                bất thường (VD: 1 user confirm quá nhiều/quá nhanh).
   confirmedVia String?
+  referralCommissionApplied Boolean @default(false) // chặn cộng hoa hồng referral 2 lần cho cùng 1 lượt (vd postback gọi lại)
   ip           String?
   userAgent    String?
   requestId    String?           @unique            // correlates client click -> network postback
@@ -123,6 +139,28 @@ model Withdrawal {
 
   @@index([userId])
   @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// REFERRAL EARNING (log mọi lần cộng tiền cho referrer — mốc thưởng + hoa hồng)
+// ---------------------------------------------------------------------------
+enum ReferralEarningType {
+  MILESTONE   // thưởng 1 lần khi đạt mốc 3/6/15 người mời thành công
+  COMMISSION  // hoa hồng % thu nhập thụ động từ người thứ 16-20 mời được, tính theo từng lượt xem
+}
+
+model ReferralEarning {
+  id           String              @id @default(cuid())
+  referrerId   String
+  referrer     User                @relation("ReferrerEarnings", fields: [referrerId], references: [id])
+  refereeId    String                                    // người được mời tạo ra khoản này
+  type         ReferralEarningType
+  amount       Int                                       // VNĐ cộng cho referrer
+  completionId String?             @unique                // TaskCompletion gốc (chỉ có ở loại COMMISSION) — unique để idempotent
+  note         String?
+  createdAt    DateTime            @default(now())
+
+  @@index([referrerId])
 }
 
 // ---------------------------------------------------------------------------

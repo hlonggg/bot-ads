@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fetchUsdToVndRate } from "@/lib/exchangeRate";
+import { handleTaskConfirmedForReferral } from "@/lib/referral";
 
 /**
  * Dán URL này vào "Your backend URL" trong Monetag SSP → Postbacks (mỗi zone
@@ -75,9 +76,10 @@ export async function GET(req: NextRequest) {
   // --- Compute the real, per-event reward from estimated_price ---
   let finalReward = completion.reward; // fallback: the snapshot taken at claim time
   const priceUsd = Number(estimatedPrice);
+  let marginPercentUsed = 0;
 
   if (completion.task.adNetwork === "monetag" && estimatedPrice && !Number.isNaN(priceUsd) && priceUsd > 0) {
-    const marginPercent = completion.task.marginPercent ?? Number(
+    marginPercentUsed = completion.task.marginPercent ?? Number(
       (await prisma.setting.findUnique({ where: { key: "defaultMarginPercent" } }))?.value ?? "50"
     );
     const manualRateFallback = Number(
@@ -85,7 +87,7 @@ export async function GET(req: NextRequest) {
     ) || undefined;
     const usdToVndRate = await fetchUsdToVndRate(manualRateFallback);
 
-    finalReward = Math.round(priceUsd * usdToVndRate * (marginPercent / 100));
+    finalReward = Math.round(priceUsd * usdToVndRate * (marginPercentUsed / 100));
   }
 
   await prisma.$transaction([
@@ -103,6 +105,20 @@ export async function GET(req: NextRequest) {
       data: { balance: { increment: finalReward } },
     }),
   ]);
+
+  // Cập nhật mốc/hoa hồng referral (nếu user này được ai đó mời) — không được
+  // để lỗi ở đây làm hỏng response postback chính, nên bọc try/catch riêng.
+  try {
+    await handleTaskConfirmedForReferral({
+      userId: completion.userId,
+      completionId: completion.id,
+      rewardVnd: finalReward,
+      marginPercent: marginPercentUsed,
+      adNetwork: completion.task.adNetwork,
+    });
+  } catch (e) {
+    console.error("[postback:monetag] referral handling failed", e);
+  }
 
   return NextResponse.json({ ok: true, rewarded: true, reward: finalReward });
 }

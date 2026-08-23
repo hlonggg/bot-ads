@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyInitData } from "@/lib/verifyInitData";
+import { handleTaskConfirmedForReferral } from "@/lib/referral";
 
 /**
  * PHƯƠNG ÁN DỰ PHÒNG — client tự xác nhận đã xem xong quảng cáo (dựa vào
@@ -71,6 +72,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       data: { balance: { increment: finalReward } },
     }),
   ]);
+
+  // Không có estimated_price thật ở đường này -> marginPercent=0, khiến hàm bên
+  // dưới bỏ qua việc suy ngược trần an toàn 70% (coi như không giới hạn thêm ở
+  // bước này) — chấp nhận được vì finalReward ở đây vốn đã nhỏ (số ước tính tĩnh).
+  try {
+    await handleTaskConfirmedForReferral({
+      userId: completion.userId,
+      completionId: completion.id,
+      rewardVnd: finalReward,
+      marginPercent: 0,
+      adNetwork: completion.task.adNetwork,
+    });
+  } catch (e) {
+    console.error("[tasks:confirm] referral handling failed", e);
+  }
 
   return NextResponse.json({ ok: true, reward: finalReward });
 }

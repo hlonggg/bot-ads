@@ -7,6 +7,7 @@ export default function PanelHome() {
     { href: "/panel/announcements", label: "Thông báo", icon: "📢" },
     { href: "/panel/tasks", label: "Nhiệm vụ", icon: "🎯" },
     { href: "/panel/completions", label: "Lượt xem", icon: "📊" },
+    { href: "/panel/referrals", label: "Referral", icon: "🎁" },
     { href: "/panel/withdrawals", label: "Rút tiền", icon: "💸" },
     { href: "/panel/guide", label: "Cài đặt & Hướng dẫn", icon: "⚙️" },
   ];

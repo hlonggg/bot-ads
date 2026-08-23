@@ -27,6 +27,7 @@ export default function ProfilePage() {
 
   const menuItems = [
     { label: "Rút tiền", href: "/profile/withdraw", icon: "💸" },
+    { label: "Mời bạn bè", href: "/profile/referral", icon: "🎁" },
     { label: "Hỗ trợ khách hàng", href: settings.supportUrl || "#", icon: "🎧", external: true },
     { label: "Nền tảng", href: settings.groupLink || "#", icon: "👥", external: true },
     { label: "Hướng dẫn", href: "/profile/guide", icon: "📖" },

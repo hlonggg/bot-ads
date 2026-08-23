@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   // (xem lib/monetagSdk.ts: extractMonetagZoneId).
   const PUBLIC_KEYS = [
     "guideText", "minWithdraw", "groupLink", "supportUrl",
-    "monetagZoneScript",
+    "monetagZoneScript", "botUsername",
     "monetagInAppEnabled", "monetagInAppFrequency", "monetagInAppCapping",
     "monetagInAppInterval", "monetagInAppTimeout", "monetagInAppEveryPage",
   ];

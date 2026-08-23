@@ -8,6 +8,7 @@ const FIELDS = [
   { key: "minWithdraw", label: "Số tiền rút tối thiểu", type: "number" },
   { key: "groupLink", label: "Link nhóm (nút Nền tảng)", type: "text" },
   { key: "supportUrl", label: "Link hỗ trợ khách hàng", type: "text" },
+  { key: "botUsername", label: "Username bot (không gồm @, dùng để tạo link mời bạn bè)", type: "text" },
 ];
 
 const CPM_FIELDS = [

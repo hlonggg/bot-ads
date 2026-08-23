@@ -64,6 +64,30 @@ Nếu `reward_event_type=not_valued` (bị lọc do spam/gian lận), hệ thố
   snapshot lúc claim và cộng nguyên số đó — các network này không gửi `estimated_price` qua
   postback này nên không áp dụng công thức trên.
 
+### ⚠️ Fallback tạm: xác nhận qua client khi Monetag chưa gửi postback
+
+Trong lúc chờ Monetag xử lý việc gửi postback (đã liên hệ support, xác nhận backend hoàn toàn
+đúng bằng cách tự gọi tay `GET /api/postback/monetag?...` và cộng tiền thành công — vấn đề nằm ở
+phía Monetag không gửi request), đã thêm route dự phòng `POST /api/tasks/[id]/confirm`:
+
+- Client tự gọi route này ngay sau khi `show_<zoneId>().then()` resolve (SDK báo đã chạy xong),
+  **không cần đợi postback** — cộng thưởng dùng số `task.reward` tĩnh (không có `estimated_price`
+  thật ở đường này).
+- **Đây là hướng đi kém tin cậy hơn** — Monetag chính thức cảnh báo dùng Frontend Callback để
+  cộng thưởng là "Risky" vì Promise chỉ xác nhận SDK chạy xong, không đảm bảo quảng cáo thật sự
+  được tính tiền/không gian lận. Ai rành kỹ thuật đều có thể tự gọi thẳng route này.
+- Giảm rủi ro ở mức tối thiểu: bắt buộc xác thực Telegram initData thật, completion phải đúng
+  thuộc về user gọi, và phải đã tồn tại đủ lâu (`MIN_AD_DURATION_SEC = 8` giây) mới cho confirm —
+  chặn kiểu gọi ngay tức khắc sau claim.
+- Mọi lượt xác nhận qua đường này được đánh dấu `confirmedVia: "client"`, hiện badge cảnh báo
+  riêng ở panel **Lượt xem** để admin dễ soi bất thường (VD: 1 user confirm liên tục sát đúng
+  ngưỡng 8s là dấu hiệu gọi thẳng API, không thật sự xem quảng cáo).
+- Nếu postback thật của Monetag tới sau đó (dù completion đã CONFIRMED qua client), route
+  postback tự bỏ qua (idempotent theo `requestId`), **không cộng tiền 2 lần**.
+- **Khi Monetag xác nhận đã khắc phục việc gửi postback**, nên cân nhắc bỏ đoạn gọi `/confirm` ở
+  `app/task/page.tsx` (giữ nguyên route để dự phòng, chỉ ngừng gọi từ client) và quay lại hoàn
+  toàn dựa vào postback — an toàn hơn nhiều vì có xác nhận từ bên thứ 3 + `estimated_price` thật.
+
 ## Việc cần làm tiếp (chưa xong 100%, cần bạn hoàn thiện theo network thật)
 
 1. **Adsterra không có postback chuẩn như Monetag** — Adsterra chủ yếu là revenue theo

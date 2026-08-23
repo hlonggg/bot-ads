@@ -8,6 +8,7 @@ export default function WithdrawPage() {
   const { initData, ready } = useTelegram();
   const router = useRouter();
   const [accountName, setAccountName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
   const [bankName, setBankName] = useState("");
   const [showBankList, setShowBankList] = useState(false);
   const [amount, setAmount] = useState("");
@@ -22,13 +23,14 @@ export default function WithdrawPage() {
       .then((d) => {
         setBalance(d.user?.balance ?? 0);
         setAccountName(d.user?.bankAccountName || "");
+        setAccountNumber(d.user?.bankAccountNumber || "");
         setBankName(d.user?.bankName || "");
       });
   }, [ready, initData]);
 
   async function submit() {
     setMessage("");
-    if (!accountName || !bankName || !amount) {
+    if (!accountName || !accountNumber || !bankName || !amount) {
       setMessage("Vui lòng điền đầy đủ thông tin");
       return;
     }
@@ -36,7 +38,13 @@ export default function WithdrawPage() {
     const res = await fetch("/api/withdrawals", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ initData, amount: Number(amount), bankAccountName: accountName, bankName }),
+      body: JSON.stringify({
+        initData,
+        amount: Number(amount),
+        bankAccountName: accountName,
+        bankAccountNumber: accountNumber,
+        bankName,
+      }),
     });
     const data = await res.json();
     setSubmitting(false);
@@ -67,6 +75,17 @@ export default function WithdrawPage() {
             onChange={(e) => setAccountName(e.target.value)}
             className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gold"
             placeholder="NGUYEN VAN A"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-500 mb-1 block">Số tài khoản</label>
+          <input
+            value={accountNumber}
+            onChange={(e) => setAccountNumber(e.target.value.replace(/\s/g, ""))}
+            inputMode="numeric"
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gold"
+            placeholder="0123456789"
           />
         </div>
 

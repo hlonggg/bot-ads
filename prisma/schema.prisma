@@ -21,6 +21,7 @@ model User {
   pendingBalance Int     @default(0)          // held while a withdrawal request is being reviewed
 
   bankAccountName String?                     // last used, prefilled on next withdraw form
+  bankAccountNumber String?
   bankName        String?
 
   createdAt     DateTime @default(now())
@@ -80,7 +81,14 @@ model TaskCompletion {
   user         User              @relation(fields: [userId], references: [id])
 
   status       CompletionStatus  @default(PENDING)
-  reward       Int                                  // snapshot of task.reward at completion time
+  reward       Int                                  // final amount credited (VND) — computed from estimatedPrice at postback time for Monetag tasks
+  estimatedPriceUsd Float?                           // raw estimated_price (USD) Monetag sent for this event, kept for admin log/debug
+  // "postback"  -> xác nhận bởi Monetag gọi về, đáng tin cậy, dùng estimated_price thật
+  // "client"    -> xác nhận tạm bằng Frontend Callback (show_XXX().then()) khi Monetag
+  //                chưa gửi postback kịp — DỄ BỊ GIẢ MẠO hơn, chỉ dùng làm phương án dự
+  //                phòng trong lúc chờ Monetag, admin nên theo dõi log này để phát hiện
+  //                bất thường (VD: 1 user confirm quá nhiều/quá nhanh).
+  confirmedVia String?
   ip           String?
   userAgent    String?
   requestId    String?           @unique            // correlates client click -> network postback
@@ -106,6 +114,7 @@ model Withdrawal {
   user            User              @relation(fields: [userId], references: [id])
   amount          Int
   bankAccountName String
+  bankAccountNumber String
   bankName        String
   status          WithdrawalStatus  @default(PENDING)
   adminNote       String?

@@ -6,7 +6,7 @@ import { fetchUsdToVndRate } from "@/lib/exchangeRate";
  * Dán URL này vào "Your backend URL" trong Monetag SSP → Postbacks (mỗi zone
  * cấu hình riêng, dán y hệt, KHÔNG sửa tên macro):
  *
- *   https://<APP_URL>/api/postback/monetag?ymid={ymid}&event_type={event_type}&reward_event_type={reward_event_type}&estimated_price={estimated_price}&secret=YOUR_POSTBACK_SECRET
+ *   https://<APP_URL>/api/postback/monetag?ymid={ymid}&event_type={event_type}&reward_event_type={reward_event_type}&estimated_price={estimated_price}&telegram_id={telegram_id}&zone_id={zone_id}&sub_zone_id={sub_zone_id}&request_var={request_var}&secret=YOUR_POSTBACK_SECRET
  *
  * Monetag sẽ tự thay {ymid}, {event_type}... bằng giá trị thật khi gọi.
  * ymid = requestId chúng ta tạo lúc claim và truyền vào show_XXX({ ymid }).
@@ -28,6 +28,18 @@ export async function GET(req: NextRequest) {
   const rewardEventType = req.nextUrl.searchParams.get("reward_event_type");
   const estimatedPrice = req.nextUrl.searchParams.get("estimated_price");
   const secret = req.nextUrl.searchParams.get("secret");
+  // Không dùng trong logic tính thưởng — chỉ nhận & log thêm để debug xem
+  // Monetag có thực sự gọi tới không và gọi với dữ liệu gì.
+  const telegramId = req.nextUrl.searchParams.get("telegram_id");
+  const zoneId = req.nextUrl.searchParams.get("zone_id");
+  const subZoneId = req.nextUrl.searchParams.get("sub_zone_id");
+  const requestVar = req.nextUrl.searchParams.get("request_var");
+
+  console.log("[postback:monetag] incoming", {
+    ymid, eventType, rewardEventType, estimatedPrice,
+    telegramId, zoneId, subZoneId, requestVar,
+    secretMatches: secret === process.env.POSTBACK_SECRET,
+  });
 
   if (!ymid || secret !== process.env.POSTBACK_SECRET) {
     return NextResponse.json({ ok: false }, { status: 401 });
@@ -43,17 +55,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, alreadyProcessed: true });
   }
 
-  console.log("[postback:monetag]", { ymid, eventType, rewardEventType, estimatedPrice });
-
   // Rewarded Interstitial: the "impression" event is what completes the ad view.
   // A "click" postback is a separate, secondary event — crediting on it too would
   // double-pay for a single ad view.
   const isValidRewardEvent = eventType === "impression" && rewardEventType === "valued";
 
   if (!isValidRewardEvent) {
+    const priceUsdRejected = Number(estimatedPrice);
     await prisma.taskCompletion.update({
       where: { id: completion.id },
-      data: { status: "REJECTED" },
+      data: {
+        status: "REJECTED",
+        estimatedPriceUsd: priceUsdRejected > 0 ? priceUsdRejected : undefined,
+      },
     });
     return NextResponse.json({ ok: true, rewarded: false, reason: "not_valued_or_wrong_event" });
   }
@@ -77,7 +91,12 @@ export async function GET(req: NextRequest) {
   await prisma.$transaction([
     prisma.taskCompletion.update({
       where: { id: completion.id },
-      data: { status: "CONFIRMED", confirmedAt: new Date(), reward: finalReward },
+      data: {
+        status: "CONFIRMED",
+        confirmedAt: new Date(),
+        reward: finalReward,
+        estimatedPriceUsd: priceUsd > 0 ? priceUsd : undefined,
+      },
     }),
     prisma.user.update({
       where: { id: completion.userId },

@@ -9,13 +9,13 @@ async function getSetting(key: string, fallback: string) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
-  const { initData, amount, bankAccountName, bankName } = body;
+  const { initData, amount, bankAccountName, bankAccountNumber, bankName } = body;
 
   const verified = verifyInitData(initData || "", process.env.BOT_TOKEN || "");
   if (!verified) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const amountNum = Number(amount);
-  if (!amountNum || amountNum <= 0 || !bankAccountName || !bankName) {
+  if (!amountNum || amountNum <= 0 || !bankAccountName || !bankAccountNumber || !bankName) {
     return NextResponse.json({ error: "invalid_input" }, { status: 400 });
   }
 
@@ -39,11 +39,12 @@ export async function POST(req: NextRequest) {
         balance: { decrement: amountNum },
         pendingBalance: { increment: amountNum },
         bankAccountName,
+        bankAccountNumber,
         bankName,
       },
     }),
     prisma.withdrawal.create({
-      data: { userId: user.id, amount: amountNum, bankAccountName, bankName, status: "PENDING" },
+      data: { userId: user.id, amount: amountNum, bankAccountName, bankAccountNumber, bankName, status: "PENDING" },
     }),
   ]);
 

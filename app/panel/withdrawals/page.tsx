@@ -7,6 +7,7 @@ interface Withdrawal {
   id: string;
   amount: number;
   bankAccountName: string;
+  bankAccountNumber: string;
   bankName: string;
   user: { username?: string; firstName?: string; telegramId: string };
 }
@@ -31,8 +32,8 @@ export default function PanelWithdrawalsPage() {
     load(initData);
   }
 
-  function copyBank(id: string, bankName: string) {
-    navigator.clipboard.writeText(bankName);
+  function copyBank(id: string, bankAccountNumber: string) {
+    navigator.clipboard.writeText(bankAccountNumber);
     setCopiedId(id);
     setTimeout(() => setCopiedId(""), 1500);
   }
@@ -75,13 +76,14 @@ function Inner({ initData, items, load, resolve, copyBank, copiedId, router }: a
             <div className="flex items-center justify-between bg-ivory rounded-xl px-3 py-2 mb-2">
               <div className="text-sm">
                 <p className="text-charcoal font-medium">{w.bankName}</p>
+                <p className="text-charcoal font-semibold">{w.bankAccountNumber}</p>
                 <p className="text-gray-500 text-xs">{w.bankAccountName}</p>
               </div>
               <button
-                onClick={() => copyBank(w.id, w.bankName)}
+                onClick={() => copyBank(w.id, w.bankAccountNumber)}
                 className="text-xs text-gold-dark font-semibold px-2 py-1 border border-gold rounded-lg"
               >
-                {copiedId === w.id ? "Đã chép" : "Sao chép"}
+                {copiedId === w.id ? "Đã chép" : "Sao chép STK"}
               </button>
             </div>
             <div className="flex gap-2">

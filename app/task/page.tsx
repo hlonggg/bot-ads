@@ -98,7 +98,24 @@ export default function TaskPage() {
           } else {
             await showMonetagRewardedInterstitial(monetagZoneId, data.requestId);
           }
-          showToast("Đang chờ xác nhận thưởng...");
+          // Monetag postback (server-side, đáng tin cậy) có thể tới sau vài giây/phút.
+          // Trong lúc chờ Monetag khắc phục việc gửi postback, tự xác nhận tạm qua
+          // client ngay khi SDK báo đã chạy xong — xem cảnh báo rủi ro chi tiết trong
+          // app/api/tasks/[id]/confirm/route.ts. Nếu postback thật tới trước/sau, route
+          // đó tự bỏ qua (idempotent), không cộng tiền 2 lần.
+          const confirmRes = await fetch(`/api/tasks/${task.id}/confirm`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ initData, requestId: data.requestId }),
+          });
+          if (confirmRes.ok) {
+            showToast("Đã cộng thưởng!");
+            fetch(`/api/tasks?initData=${encodeURIComponent(initData)}`)
+              .then((r) => r.json())
+              .then((d) => setTasks(d.tasks || []));
+          } else {
+            showToast("Đang chờ xác nhận thưởng...");
+          }
         } catch {
           // Ad failed/skipped client-side — free up the cooldown/daily-limit slot
           await fetch(`/api/tasks/${task.id}/cancel`, {

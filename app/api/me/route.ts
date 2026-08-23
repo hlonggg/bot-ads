@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
       balance: true,
       pendingBalance: true,
       bankAccountName: true,
+      bankAccountNumber: true,
       bankName: true,
     },
   });
